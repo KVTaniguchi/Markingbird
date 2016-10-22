@@ -1110,20 +1110,27 @@ public struct Markdown {
     }
 
     fileprivate mutating func getListEvaluator(_ isInsideParagraphlessListItem: Bool = false) -> MatchEvaluator {
-        return { match in
-            let list = match.valueOfGroupAtIndex(1) as String
-            let listType = Regex.isMatch(match.valueOfGroupAtIndex(3) as String, pattern: Markdown._markerUL) ? "ul" : "ol"
-            var result: String
-
-            result = self.processListItems(list,
-                marker: listType == "ul" ? Markdown._markerUL : Markdown._markerOL,
-                isInsideParagraphlessListItem: isInsideParagraphlessListItem)
-
-            result = "<\(listType)>\n\(result)</\(listType)>\n"
-            return result
+        
+        let match: Match
+        let am = Match(textCheckingResult: NSTextCheckingResult(), string: "")
+        let list = match.valueOfGroupAtIndex(1) as String
+        let listType = Regex.isMatch(match.valueOfGroupAtIndex(3) as String, pattern: Markdown._markerUL) ? "ul" : "ol"
+        var result: String
+        result = self.processListItems(list,
+                                       marker: listType == "ul" ? Markdown._markerUL : Markdown._markerOL,
+                                       isInsideParagraphlessListItem: isInsideParagraphlessListItem)
+        
+        result = "<\(listType)>\n\(result)</\(listType)>\n"
+        
+        func evaluator (match: Match) -> MatchEvaluator {
+            return { match in
+                return result
+            }
         }
+        
+        return evaluator(match: match)
     }
-
+    
     /// Process the contents of a single ordered or unordered list, splitting it
     /// into individual list items.
     fileprivate mutating func processListItems(_ list: String, marker: String, isInsideParagraphlessListItem: Bool = false) -> String {
@@ -1162,31 +1169,37 @@ public struct Markdown {
             ].joined(separator: "\n")
 
         var lastItemHadADoubleNewline = false
-
-        // has to be a closure, so subsequent invocations can share the bool
-        let listItemEvaluator: MatchEvaluator = { match in
-            var item = match.valueOfGroupAtIndex(3)
-
-            let endsWithDoubleNewline = item.hasSuffix("\n\n")
-            let containsDoubleNewline = endsWithDoubleNewline || Markdown.doesString(item, containSubstring: "\n\n")
-
-            if containsDoubleNewline || lastItemHadADoubleNewline {
-                // we could correct any bad indentation here..
-                item = self.runBlockGamut(self.outdent(item as String) + "\n", unhash: false) as NSString
-            }
-            else {
-                // recursion for sub-lists
-                item = self.doLists(self.outdent(item as String), isInsideParagraphlessListItem: true) as NSString
-                item = Markdown.trimEnd(item, "\n") as NSString
-                if (!isInsideParagraphlessListItem) {
-                    // only the outer-most item should run this, otherwise it's run multiple times for the inner ones
-                    item = self.runSpanGamut(item as String) as NSString
-                }
-            }
-            lastItemHadADoubleNewline = endsWithDoubleNewline
-            return "<li>\(item)</li>\n"
+        
+        let match: Match
+        var item = match.valueOfGroupAtIndex(3)
+        
+        let endsWithDoubleNewline = item.hasSuffix("\n\n")
+        let containsDoubleNewline = endsWithDoubleNewline || Markdown.doesString(item, containSubstring: "\n\n")
+        
+        if containsDoubleNewline || lastItemHadADoubleNewline {
+            // we could correct any bad indentation here..
+            item = self.runBlockGamut(self.outdent(item as String) + "\n", unhash: false) as NSString
         }
-
+        else {
+            // recursion for sub-lists
+            item = self.doLists(self.outdent(item as String), isInsideParagraphlessListItem: true) as NSString
+            item = Markdown.trimEnd(item, "\n") as NSString
+            if (!isInsideParagraphlessListItem) {
+                // only the outer-most item should run this, otherwise it's run multiple times for the inner ones
+                item = self.runSpanGamut(item as String) as NSString
+            }
+        }
+        lastItemHadADoubleNewline = endsWithDoubleNewline
+        let result = "<li>\(item)</li>\n"
+        
+        func evaluator (match: Match) -> MatchEvaluator {
+            return { match in
+                return result
+            }
+        }
+        // has to be a closure, so subsequent invocations can share the bool
+        let listItemEvaluator = evaluator(match: match)
+        
         list = Regex.replace(list,
             pattern: pattern,
             evaluator: listItemEvaluator,
@@ -1582,10 +1595,14 @@ public struct Markdown {
     /// escapes Bold [ * ] and Italic [ _ ] characters
     fileprivate func escapeBoldItalic(_ s: String) -> String {
         var str = s as NSString
-        str = str.replacingOccurrences(of: "*",
-            with: Markdown._escapeTable["*"]!)
-        str = str.replacingOccurrences(of: "_",
-            with: Markdown._escapeTable["_"]!)
+        if let escapeStars = Markdown._escapeTable["*"], let escapeUnderscore = Markdown._escapeTable["_"] {
+            str = str.replacingOccurrences(of: "*", with: escapeStars) as NSString
+            str = str.replacingOccurrences(of: "_", with: escapeUnderscore) as NSString
+        }
+        
+        
+//        str = str.replacingOccurrences(of: "*", with: Markdown._escapeTable["*"]!)
+//        str = str.replacingOccurrences(of: "_", with: Markdown._escapeTable["_"]!)
         return str as String
     }
 
