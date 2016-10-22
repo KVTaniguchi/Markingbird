@@ -147,7 +147,7 @@ public struct MarkdownOptions {
 ///
 /// Markdown allows you to write using an easy-to-read, easy-to-write plain text format,
 /// then convert it to structurally valid XHTML (or HTML).
-public struct Markdown {
+public class Markdown {
     // The MarkdownRegex, MarkdownRegexOptions, and MarkdownRegexMatch types
     // provide interfaces similar to .NET's Regex, RegexOptions, and Match.
     fileprivate typealias Regex = MarkdownRegex
@@ -296,7 +296,7 @@ public struct Markdown {
     /// - parameter text: Markdown-format text to be transformed to HTML
     ///
     /// - returns: HTML-format text
-    public mutating func transform(_ text: String) -> String {
+    public func transform(_ text: String) -> String {
         // The order in which other subs are called here is
         // essential. Link and image substitutions need to happen before
         // EscapeSpecialChars(), so that any *'s or _'s in the a
@@ -319,7 +319,7 @@ public struct Markdown {
     }
 
     /// Perform transformations that form block-level tags like paragraphs, headers, and list items.
-    fileprivate mutating func runBlockGamut(_ text: String, unhash: Bool = true) -> String {
+    fileprivate func runBlockGamut(_ text: String, unhash: Bool = true) -> String {
         var text = doHeaders(text)
         text = doHorizontalRules(text)
         text = doLists(text)
@@ -413,7 +413,7 @@ public struct Markdown {
         return grafs.joined(separator: "\n\n")
     }
 
-    fileprivate mutating func setup() {
+    fileprivate func setup() {
         // Clear the global hashes. If we don't clear these, you get conflicts
         // from other articles when generating a page which contains more than
         // one article (e.g. an index page that shows the N most recent
@@ -424,7 +424,7 @@ public struct Markdown {
         _listLevel = 0
     }
 
-    fileprivate mutating func cleanup() {
+    fileprivate func cleanup() {
         setup()
     }
 
@@ -489,12 +489,12 @@ public struct Markdown {
     /// Strips link definitions from text, stores the URLs and titles in hash references.
     ///
     /// ^[id]: url "optional title"
-    fileprivate mutating func stripLinkDefinitions(_ text: String) -> String
+    fileprivate func stripLinkDefinitions(_ text: String) -> String
     {
         return Markdown._linkDef.replace(text) { self.linkEvaluator($0) }
     }
 
-    fileprivate mutating func linkEvaluator(_ match: Match) -> String
+    fileprivate func linkEvaluator(_ match: Match) -> String
     {
         let linkID = match.valueOfGroupAtIndex(1) as String
         _urls[linkID] = encodeAmpsAndAngles(match.valueOfGroupAtIndex(2) as String)
@@ -659,11 +659,11 @@ public struct Markdown {
     }
 
     /// replaces any block-level HTML blocks with hash entries
-    fileprivate mutating func hashHTMLBlocks(_ text: String) -> String {
+    fileprivate func hashHTMLBlocks(_ text: String) -> String {
         return Markdown._blocksHtml.replace(text) { self.htmlEvaluator($0) }
     }
 
-    fileprivate mutating func htmlEvaluator(_ match: Match) -> String {
+    fileprivate func htmlEvaluator(_ match: Match) -> String {
         let text: String = match.valueOfGroupAtIndex(1) as String 
         let key = Markdown.getHashKey(text, isHtmlBlock: true)
         _htmlBlocks[key] = text
@@ -1094,7 +1094,7 @@ public struct Markdown {
         options: RegexOptions.Multiline.union(RegexOptions.IgnorePatternWhitespace))
 
     /// Turn Markdown lists into HTML ul and ol and li tags
-    fileprivate mutating func doLists(_ text: String, isInsideParagraphlessListItem: Bool = false) -> String {
+    fileprivate func doLists(_ text: String, isInsideParagraphlessListItem: Bool = false) -> String {
         // We use a different prefix before nested lists than top-level lists.
         // See extended comment in _ProcessListItems().
         var text = text
@@ -1109,31 +1109,23 @@ public struct Markdown {
         return text
     }
 
-    fileprivate mutating func getListEvaluator(_ isInsideParagraphlessListItem: Bool = false) -> MatchEvaluator {
-        
-        let match: Match
-        let am = Match(textCheckingResult: NSTextCheckingResult(), string: "")
-        let list = match.valueOfGroupAtIndex(1) as String
-        let listType = Regex.isMatch(match.valueOfGroupAtIndex(3) as String, pattern: Markdown._markerUL) ? "ul" : "ol"
-        var result: String
-        result = self.processListItems(list,
-                                       marker: listType == "ul" ? Markdown._markerUL : Markdown._markerOL,
-                                       isInsideParagraphlessListItem: isInsideParagraphlessListItem)
-        
-        result = "<\(listType)>\n\(result)</\(listType)>\n"
-        
-        func evaluator (match: Match) -> MatchEvaluator {
-            return { match in
-                return result
-            }
+    fileprivate func getListEvaluator(_ isInsideParagraphlessListItem: Bool = false) -> MatchEvaluator {
+        return { match in
+            let list = match.valueOfGroupAtIndex(1) as String
+            let listType = Regex.isMatch(match.valueOfGroupAtIndex(3) as String, pattern: Markdown._markerUL) ? "ul" : "ol"
+            var result: String
+            result = self.processListItems(list,
+                                           marker: listType == "ul" ? Markdown._markerUL : Markdown._markerOL,
+                                           isInsideParagraphlessListItem: isInsideParagraphlessListItem)
+            
+            result = "<\(listType)>\n\(result)</\(listType)>\n"
+            return result
         }
-        
-        return evaluator(match: match)
     }
     
     /// Process the contents of a single ordered or unordered list, splitting it
     /// into individual list items.
-    fileprivate mutating func processListItems(_ list: String, marker: String, isInsideParagraphlessListItem: Bool = false) -> String {
+    fileprivate func processListItems(_ list: String, marker: String, isInsideParagraphlessListItem: Bool = false) -> String {
         // The listLevel global keeps track of when we're inside a list.
         // Each time we enter a list, we increment it; when we leave a list,
         // we decrement. If it's zero, we're not in a list anymore.
@@ -1170,39 +1162,35 @@ public struct Markdown {
 
         var lastItemHadADoubleNewline = false
         
-        let match: Match
-        var item = match.valueOfGroupAtIndex(3)
-        
-        let endsWithDoubleNewline = item.hasSuffix("\n\n")
-        let containsDoubleNewline = endsWithDoubleNewline || Markdown.doesString(item, containSubstring: "\n\n")
-        
-        if containsDoubleNewline || lastItemHadADoubleNewline {
-            // we could correct any bad indentation here..
-            item = self.runBlockGamut(self.outdent(item as String) + "\n", unhash: false) as NSString
-        }
-        else {
-            // recursion for sub-lists
-            item = self.doLists(self.outdent(item as String), isInsideParagraphlessListItem: true) as NSString
-            item = Markdown.trimEnd(item, "\n") as NSString
-            if (!isInsideParagraphlessListItem) {
-                // only the outer-most item should run this, otherwise it's run multiple times for the inner ones
-                item = self.runSpanGamut(item as String) as NSString
+        let matchEvaluator: MatchEvaluator = { match in
+            var item = match.valueOfGroupAtIndex(3)
+            
+            let endsWithDoubleNewline = item.hasSuffix("\n\n")
+            let containsDoubleNewline = endsWithDoubleNewline || Markdown.doesString(item, containSubstring: "\n\n")
+            
+            if containsDoubleNewline || lastItemHadADoubleNewline {
+                // we could correct any bad indentation here..
+                item = self.runBlockGamut(self.outdent(item as String) + "\n", unhash: false) as NSString
             }
-        }
-        lastItemHadADoubleNewline = endsWithDoubleNewline
-        let result = "<li>\(item)</li>\n"
-        
-        func evaluator (match: Match) -> MatchEvaluator {
-            return { match in
-                return result
+            else {
+                // recursion for sub-lists
+                item = self.doLists(self.outdent(item as String), isInsideParagraphlessListItem: true) as NSString
+                item = Markdown.trimEnd(item, "\n") as NSString
+                if (!isInsideParagraphlessListItem) {
+                    // only the outer-most item should run this, otherwise it's run multiple times for the inner ones
+                    item = self.runSpanGamut(item as String) as NSString
+                }
             }
+            lastItemHadADoubleNewline = endsWithDoubleNewline
+            let result = "<li>\(item)</li>\n"
+            return result
         }
+        
         // has to be a closure, so subsequent invocations can share the bool
-        let listItemEvaluator = evaluator(match: match)
         
         list = Regex.replace(list,
             pattern: pattern,
-            evaluator: listItemEvaluator,
+            evaluator: matchEvaluator,
             options: RegexOptions.IgnorePatternWhitespace.union(RegexOptions.Multiline))
 
         _listLevel -= 1
@@ -1335,11 +1323,11 @@ public struct Markdown {
 
 
     /// Turn Markdown > quoted blocks into HTML blockquote blocks
-    fileprivate mutating func doBlockQuotes(_ text: String) -> String {
+    fileprivate func doBlockQuotes(_ text: String) -> String {
         return Markdown._blockquote.replace(text) { self.blockQuoteEvaluator($0) }
     }
 
-    fileprivate mutating func blockQuoteEvaluator(_ match: Match) -> String {
+    fileprivate func blockQuoteEvaluator(_ match: Match) -> String {
         var bq = match.valueOfGroupAtIndex(1) as String
 
         bq = Regex.replace(bq,
